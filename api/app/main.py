@@ -3,6 +3,7 @@
 from io import BytesIO
 import subprocess
 import tempfile
+import uuid
 
 from fastapi import FastAPI, Depends, UploadFile, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -64,7 +65,7 @@ async def get_audio_by_user_phrase(
     if audio_format != "m4a":
         raise HTTPException(status_code=400, detail="Invalid Audio Format")
 
-    query = "SELECT audio FROM user_phrase_audio WHERE user_id=%s AND phrase_id=%s"
+    query = "SELECT audio_path FROM user_phrase_audio WHERE user_id=%s AND phrase_id=%s"
     if db_conn.is_connected():
         with db_conn.cursor(dictionary=True) as cursor:
             cursor.execute(query, (user_id, phrase_id))
@@ -75,14 +76,16 @@ async def get_audio_by_user_phrase(
     if not res:
         raise HTTPException(status_code=404, detail="Record Not Found")
 
-    audio_data = res["audio"]
+    audio_path = res["audio_path"]
 
-    with tempfile.NamedTemporaryFile(delete=True, dir=".", suffix=".m4a") as temp_file:
+    with tempfile.NamedTemporaryFile(
+        delete=True, dir="/tmp", suffix=".m4a"
+    ) as temp_file:
         ffmpeg_command = [
             "ffmpeg",
             "-y",
             "-i",
-            "pipe:0",
+            audio_path,
             temp_file.name,
         ]
         proc = subprocess.Popen(
@@ -92,7 +95,7 @@ async def get_audio_by_user_phrase(
             stderr=subprocess.PIPE,
         )
 
-        proc.communicate(audio_data)
+        proc.communicate()
 
         if proc.returncode != 0:
             raise HTTPException(status_code=500, detail="Convert Audio Failed")
@@ -124,12 +127,13 @@ async def post_audio_by_user_and_phrase(
     audio_data = BytesIO(await audio_file.read())
     audio = AudioSegment.from_file(audio_data, format="m4a")
 
-    wav_data = audio.export(format="wav").read()
+    audio_file_path = f"/tmp/{str(uuid.uuid4())}.wav"
+    audio.export(audio_file_path, format="wav")
 
-    query = "INSERT INTO user_phrase_audio (user_id, phrase_id, audio) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE audio = VALUES(audio), updated_at = NOW()"
+    query = "INSERT INTO user_phrase_audio (user_id, phrase_id, audio_path) VALUES (%s, %s, %s) ON DUPLICATE KEY UPDATE audio_path = VALUES(audio_path), updated_at = NOW()"
     if db_conn.is_connected():
         with db_conn.cursor() as cursor:
-            cursor.execute(query, (user_id, phrase_id, wav_data))
+            cursor.execute(query, (user_id, phrase_id, audio_file_path))
         db_conn.commit()
     else:
         raise HTTPException(status_code=500, detail="Database Not Connected")

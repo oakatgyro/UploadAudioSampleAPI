@@ -10,7 +10,7 @@ CREATE TABLE phrase (
 CREATE TABLE user_phrase_audio (
     user_id INTEGER NOT NULL,
     phrase_id INTEGER NOT NULL,
-    audio LONGBLOB NOT NULL,
+    audio_path VARCHAR(255) NOT NULL,
     created_at Datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at Datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (user_id, phrase_id),
