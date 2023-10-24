@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  db:
+    image: mysql:8.0.34
+    platform: linux/amd64
+    container_name: mysql_db
+    environment:
+      MYSQL_ROOT_PASSWORD: vokTC9pwQW
+      MYSQL_DATABASE: sampledb
+      MYSQL_USER: mysqluser
+      MYSQL_PASSWORD: YdWCfSV9jg
+      TZ: "Asia/Tokyo"
+    volumes:
+      - ./db/data:/var/lib/mysql
+      - ./db/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./db/initdb.d:/docker-entrypoint-initdb.d
+    ports:
+      - 13306:13306
+    command: --port 13306
+    tty: true
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      timeout: 30s
+      interval: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    depends_on:
+      db:
+        condition: service_healthy
+    container_name: api
+    image: api_app
+    build: 
+      context: ./api
+      dockerfile: Dockerfile
+    environment:
+      MYSQL_DATABASE: sampledb
+      MYSQL_USER: mysqluser
+      MYSQL_PASSWORD: YdWCfSV9jg
+      MYSQL_PORT: 13306
+      MYSQL_HOST: db
+    ports:
+      - 80:8000
+    volumes:
+      - ./api/app:/app
+    restart: on-failure
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    expose:
+      - 8000
